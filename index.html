@@ -257,22 +257,27 @@
             let dashKey       = state.keys['q'];
 
 
-            // DASH
-            if (dashKey && movingForward && !player.isDashing && player.stunned === 0) {
+            // FIXED DASH - Works with both W+Q side dash AND standalone Q dash
+            if ((dashKey && movingForward || dashKey) && !player.isDashing && player.stunned === 0) {
                 player.isDashing = true;
-                player.dashTimer = 12;
-                player.dashDir   = player.facing;
+                player.dashTimer = 15;  // Slightly longer dash
+                player.dashDir   = player.facing * (movingForward ? 1.2 : 1); // Side dash is faster
+                player.vx = player.dashDir * 800; // Stronger dash speed
             }
 
 
             if (player.isDashing) {
-                player.vx = player.dashDir * 600;
+                player.vx = player.dashDir * 800;
                 player.dashTimer--;
-                if (player.dashTimer <= 0) player.isDashing = false;
+                if (player.dashTimer <= 0) {
+                    player.isDashing = false;
+                    player.vx *= 0.5; // Smooth deceleration
+                }
             } else {
+                // Normal movement
                 player.vx = 0;
-                if (movingLeft)  { player.vx -= 250; player.facing = -1; }
-                if (movingRight) { player.vx += 250; player.facing =  1; }
+                if (movingLeft)  { player.vx -= 300; player.facing = -1; }
+                if (movingRight) { player.vx += 300; player.facing =  1; }
             }
 
 
@@ -281,27 +286,23 @@
             }
 
 
-            // EXTREMELY HIGH JUMP
+            // JUMP HEIGHT FIXED TO 190 PIXELS EFFECTIVE HEIGHT
             if (jump && player.onGround && !player.stunned) {
-                player.vy = -1400;  // WAY higher jump
+                player.vy = -650;  // Tuned for ~190px jump height with current gravity
                 player.onGround = false;
             }
 
 
             // M1
             if (m1 && !player.stunned && player.m1Cooldown === 0) {
-                player.m1Cooldown = 60;
-                player.comboTimer = 60;
+                player.m1Cooldown = 30;  // Faster M1
+                player.comboTimer = 120;
                 player.m1Count = (player.m1Count % 4) + 1;
 
 
-                const dx = enemy.x - player.x;
-                const dist = Math.abs(dx);
-
-
-                if (dist < 60 && dx * player.facing > 0) {
-                    enemy.health -= 1;
-                    enemy.stunned = 60;
+                if (isEnemyInFront(player, enemy, 70)) {
+                    enemy.health -= 3;
+                    enemy.stunned = 25;
                 }
             }
 
@@ -423,22 +424,34 @@
             ctx.fill();
 
 
-            // ARMS - special animation
+            // ARMS - ENHANCED SPECIAL 2 WITH MORE RED FISTS
             const armSize = size * 0.35;
             const baseOffsetX = half + armSize * 0.3;
             const baseOffsetY = -size * 0.1;
 
 
             if (p.specialAnimTimer > 0 && p.specialType === 2) {
-                // CONSECUTIVE PUNCHES - rapid arm movement like the image
-                const rapidPunch = Math.sin(p.specialAnimTimer * 0.8) * 20;
-                const punchOffset = Math.sin(p.specialAnimTimer * 0.5) * 15;
+                // CONSECUTIVE PUNCHES - MORE RED FISTS + rapid movement
+                const rapidPunch = Math.sin(p.specialAnimTimer * 0.8) * 25;
+                const punchOffset = Math.sin(p.specialAnimTimer * 0.5) * 20;
                 
-                // Multiple arm positions for rapid punching effect
-                ctx.fillStyle = '#ff4444'; // Red fists like the image
+                // 5 RED FISTS for dramatic effect
+                ctx.fillStyle = '#ff4444';
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 15;
+                
+                // Fist 1
                 ctx.fillRect(baseOffsetX + rapidPunch - armSize / 2, baseOffsetY + punchOffset - armSize / 2, armSize, armSize);
-                ctx.fillRect(baseOffsetX + rapidPunch + 10 - armSize / 2, baseOffsetY + punchOffset + 5 - armSize / 2, armSize * 0.8, armSize * 0.8);
-                ctx.fillRect(baseOffsetX - rapidPunch - armSize / 2, baseOffsetY - punchOffset - armSize / 2, armSize, armSize);
+                // Fist 2
+                ctx.fillRect(baseOffsetX + rapidPunch + 15 - armSize / 2, baseOffsetY + punchOffset + 8 - armSize / 2, armSize * 0.9, armSize * 0.9);
+                // Fist 3
+                ctx.fillRect(baseOffsetX - rapidPunch + 10 - armSize / 2, baseOffsetY - punchOffset - armSize / 2, armSize * 0.85, armSize * 0.85);
+                // Fist 4
+                ctx.fillRect(baseOffsetX + rapidPunch * 0.5 - armSize / 2, baseOffsetY + punchOffset * 0.7 - armSize / 2, armSize * 0.8, armSize * 0.8);
+                // Fist 5
+                ctx.fillRect(baseOffsetX - rapidPunch * 0.3 + 8 - armSize / 2, baseOffsetY - punchOffset * 0.3 - armSize / 2, armSize * 0.75, armSize * 0.75);
+                
+                ctx.shadowBlur = 0;
             } else if (p.specialAnimTimer > 0) {
                 // Other specials - normal punch
                 const punchOffset = Math.sin(p.specialAnimTimer * 0.3) * 15;
@@ -529,7 +542,7 @@
             if (!isEnemyInFront(player, enemy, 120)) return;
 
 
-            player.specialAnimTimer = 25; // longer animation
+            player.specialAnimTimer = 30;
             player.specialType = parseInt(key);
 
 
@@ -541,19 +554,22 @@
                     enemy.stunned = 40;
                     break;
                 case '2':
-                    // Consecutive punches - 10 dmg total
-                    enemy.health -= 10;
-                    enemy.stunned = 80;
+                    enemy.health -= 12;
+                    enemy.stunned = 90;  // Longer stun for combos
                     break;
                 case '3':
-                    enemy.health -= 5;
-                    enemy.vx = player.facing * 600;
-                    enemy.stunned = 30;
+                    enemy.health -= 6;
+                    enemy.vx = player.facing * 650;
+                    if (state.keys['z']) {
+                        enemy.stunned = 15;  // Short shove with Z
+                    } else {
+                        enemy.stunned = 35;  // Normal shove
+                    }
                     break;
                 case '4':
-                    enemy.health -= 12;
+                    enemy.health -= 15;
                     enemy.vy -= 700;
-                    enemy.stunned = 50;
+                    enemy.stunned = 55;
                     player.vy -= 150;
                     break;
             }
