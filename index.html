@@ -233,7 +233,7 @@
             // Respawn handling
             if (player.health <= 0) {
                 player.respawnTimer++;
-                if (player.respawnTimer > 120) { // 2 seconds
+                if (player.respawnTimer > 120) {
                     resetPlayer();
                     resetDummy();
                 }
@@ -281,9 +281,9 @@
             }
 
 
-            // MUCH HIGHER JUMP
+            // EXTREMELY HIGH JUMP
             if (jump && player.onGround && !player.stunned) {
-                player.vy = -1100;  // Much higher jump
+                player.vy = -1400;  // WAY higher jump
                 player.onGround = false;
             }
 
@@ -423,22 +423,31 @@
             ctx.fill();
 
 
-            // ARMS - animated for specials
+            // ARMS - special animation
             const armSize = size * 0.35;
             const baseOffsetX = half + armSize * 0.3;
             const baseOffsetY = -size * 0.1;
 
 
-            ctx.fillStyle = '#ffd';
-
-
-            if (p.specialAnimTimer > 0) {
-                // Punch animation - arms swing forward
+            if (p.specialAnimTimer > 0 && p.specialType === 2) {
+                // CONSECUTIVE PUNCHES - rapid arm movement like the image
+                const rapidPunch = Math.sin(p.specialAnimTimer * 0.8) * 20;
+                const punchOffset = Math.sin(p.specialAnimTimer * 0.5) * 15;
+                
+                // Multiple arm positions for rapid punching effect
+                ctx.fillStyle = '#ff4444'; // Red fists like the image
+                ctx.fillRect(baseOffsetX + rapidPunch - armSize / 2, baseOffsetY + punchOffset - armSize / 2, armSize, armSize);
+                ctx.fillRect(baseOffsetX + rapidPunch + 10 - armSize / 2, baseOffsetY + punchOffset + 5 - armSize / 2, armSize * 0.8, armSize * 0.8);
+                ctx.fillRect(baseOffsetX - rapidPunch - armSize / 2, baseOffsetY - punchOffset - armSize / 2, armSize, armSize);
+            } else if (p.specialAnimTimer > 0) {
+                // Other specials - normal punch
                 const punchOffset = Math.sin(p.specialAnimTimer * 0.3) * 15;
+                ctx.fillStyle = '#ffd';
                 ctx.fillRect(baseOffsetX + punchOffset - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
                 ctx.fillRect(-baseOffsetX + punchOffset - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
             } else {
                 // Normal position
+                ctx.fillStyle = '#ffd';
                 ctx.fillRect(baseOffsetX - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
                 ctx.fillRect(-baseOffsetX - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
             }
@@ -520,7 +529,7 @@
             if (!isEnemyInFront(player, enemy, 120)) return;
 
 
-            player.specialAnimTimer = 20; // arm swing animation
+            player.specialAnimTimer = 25; // longer animation
             player.specialType = parseInt(key);
 
 
@@ -532,6 +541,7 @@
                     enemy.stunned = 40;
                     break;
                 case '2':
+                    // Consecutive punches - 10 dmg total
                     enemy.health -= 10;
                     enemy.stunned = 80;
                     break;
