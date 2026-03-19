@@ -4,7 +4,10 @@
     <title>2D Strongest Battlegrounds</title>
     <style>
         body { margin: 0; background: #222; overflow: hidden; font-family: Arial; }
-        canvas { background: linear-gradient(to bottom, #87CEEB 0%, #98D8E9 70%, #D2B48C 100%); }
+        canvas {
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E9 70%, #D2B48C 100%);
+            display: block;
+        }
         #ui {
             position: absolute; top: 10px; left: 10px; color: white; font-size: 18px;
             text-shadow: 2px 2px 4px black;
@@ -15,11 +18,16 @@
     </style>
 </head>
 <body>
-    anvas id="game"></canvas>
+    <canvas id="game"></canvas>
+
+
     <div id="ui">
-        <div>Health: <span id="health">100</span></div>
+        <div>Player HP: <span id="health">100</span></div>
+        <div>Dummy HP: <span id="dummyhp">100</span></div>
         <div>M1 Count: <span id="m1count">0</span>/4</div>
     </div>
+
+
     <div id="keys">
         WASD: Move | Z: M1 | Q: Dash (W+Q = side dash) | Space: Jump | 1-4: Specials
     </div>
@@ -35,21 +43,24 @@
         // Game state
         const state = {
             players: [{
-                x: 200, y: 100, vx: 0, vy: 0, width: 40, height: 60, health: 100,
-                m1Count: 0, facing: 1, onGround: false, stunned: 0, comboTimer: 0,
+                x: 200, y: canvas.height - 100, vx: 0, vy: 0,
+                width: 50, height: 50, health: 100,   // square player
+                m1Count: 0, facing: 1, onGround: false,
+                stunned: 0, comboTimer: 0,
                 isDashing: false, dashTimer: 0, dashDir: 0
             }],
             enemies: [{
-                x: 600, y: 100, vx: 0, vy: 0, width: 40, height: 60, health: 100,
-                m1Count: 0, facing: -1, onGround: false, stunned: 0, comboTimer: 0
+                x: 600, y: canvas.height - 100, vx: 0, vy: 0,
+                width: 50, height: 50, health: 100,   // square dummy
+                m1Count: 0, facing: -1, onGround: false,
+                stunned: 0, comboTimer: 0,
+                isDummy: true
             }],
             walls: [
-                {x: 0, y: canvas.height - 50, width: canvas.width, height: 50},         // Ground
-                {x: 100, y: 200, width: 20, height: 200},                               // Left wall
-                {x: canvas.width - 120, y: 200, width: 20, height: 200}                 // Right wall
+                { x: 0, y: canvas.height - 50, width: canvas.width, height: 50 } // Ground
             ],
             keys: {},
-            camera: {x: 0, y: 0}
+            camera: { x: 0, y: 0 }
         };
 
 
@@ -84,36 +95,29 @@
 
 
             // Dashing and movement
-            // Start side dash: W + Q in facing direction (can attack during dash)
             if (dashKey && movingForward && !player.isDashing && player.stunned === 0) {
                 player.isDashing = true;
-                player.dashTimer = 12;      // ~0.2s at 60fps
+                player.dashTimer = 12;
                 player.dashDir   = player.facing;
             }
 
 
             if (player.isDashing) {
-                // Dash movement
                 player.vx = player.dashDir * 800;
                 player.dashTimer--;
-                if (player.dashTimer <= 0) {
-                    player.isDashing = false;
-                }
+                if (player.dashTimer <= 0) player.isDashing = false;
             } else {
-                // Normal horizontal movement when not dashing
                 player.vx = 0;
                 if (movingLeft)  { player.vx -= 400; player.facing = -1; }
                 if (movingRight) { player.vx += 400; player.facing =  1; }
             }
 
 
-            // Forward (W) momentum (small vertical push if on ground)
             if (movingForward && player.onGround) {
                 player.vy -= 100;
             }
 
 
-            // Jump
             if (jump && player.onGround && !player.stunned) {
                 player.vy = -600;
                 player.onGround = false;
@@ -122,7 +126,7 @@
 
             // M1 Combat System
             if (m1 && !player.stunned) {
-                player.comboTimer = 120; // 2 seconds at 60fps
+                player.comboTimer = 120;
                 player.m1Count = (player.m1Count % 4) + 1;
 
 
@@ -130,15 +134,13 @@
                 const dist = Math.abs(dx);
 
 
-                if (dist < 60 && dx * player.facing > 0) { // In range & facing
+                if (dist < 60 && dx * player.facing > 0) {
                     if (player.m1Count === 4) {
                         if (jump) {
-                            // 3M1 + Jump + M1 = DOWN SLAM
                             enemy.health -= 12;
                             enemy.vy = 800;
                             enemy.stunned = 60;
                         } else if (movingForward) {
-                            // 4M1 holding W = UPPERCUT
                             enemy.health -= 10;
                             enemy.vy = -550;
                             player.vy = -250;
@@ -153,31 +155,8 @@
             }
 
 
-            // Original wall-combo dash (kept, optional)
-            if (dashKey && player.comboTimer > 0 && player.m1Count === 4 && !player.isDashing) {
-                player.vx = player.facing * 800;
-                player.comboTimer = 0;
-
-
-                // Check wall combo
-                const nearWall = state.walls.some(wall => {
-                    return Math.abs(player.x - (wall.x + (wall.width / 2) * player.facing)) < 50;
-                });
-
-
-                if (nearWall) {
-                    const dx = enemy.x - player.x;
-                    if (Math.abs(dx) < 80) {
-                        enemy.health -= 18;
-                        enemy.stunned = 90;
-                        enemy.vx = -player.facing * 400;
-                    }
-                }
-            }
-
-
             // Physics
-            player.vy += 1200 * (1/60); // Gravity
+            player.vy += 1200 * (1/60);
             player.x  += player.vx * (1/60);
             player.y  += player.vy * (1/60);
 
@@ -188,7 +167,8 @@
 
 
             // Update UI
-            document.getElementById('health').textContent = Math.max(0, Math.floor(player.health));
+            document.getElementById('health').textContent  = Math.max(0, Math.floor(player.health));
+            document.getElementById('dummyhp').textContent = Math.max(0, Math.floor(enemy.health));
             document.getElementById('m1count').textContent = player.m1Count;
 
 
@@ -202,7 +182,6 @@
             entity.onGround = false;
 
 
-            // Ground/walls
             for (let wall of state.walls) {
                 if (entity.x + entity.width/2 > wall.x &&
                     entity.x - entity.width/2 < wall.x + wall.width &&
@@ -214,35 +193,18 @@
                         entity.y = wall.y - entity.height/2;
                         entity.vy = 0;
                         entity.onGround = true;
-                    } else { // Wall
-                        entity.x = wall.x + (wall.width/2 + entity.width/2) * (entity.facing > 0 ? 1 : -1);
-                        entity.vx = 0;
                     }
                 }
             }
 
 
-            // Stun decay
             if (entity.stunned > 0) entity.stunned--;
         }
 
 
+        // Dummy: no AI, just stands still
         function updateEnemyAI() {
             const enemy = state.enemies[0];
-            const player = state.players[0];
-
-
-            if (enemy.stunned <= 0) {
-                const dx = player.x - enemy.x;
-                enemy.facing = dx > 0 ? 1 : -1;
-                if (Math.abs(dx) < 100) {
-                    enemy.vx = enemy.facing * 200;
-                } else {
-                    enemy.vx *= 0.9;
-                }
-            }
-
-
             enemy.vy += 1200 * (1/60);
             enemy.x  += enemy.vx * (1/60);
             enemy.y  += enemy.vy * (1/60);
@@ -252,6 +214,7 @@
 
         function render() {
             ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.translate(-state.camera.x, -state.camera.y);
 
 
@@ -260,16 +223,7 @@
             ctx.fillRect(0, canvas.height - 50 - state.camera.y, canvas.width * 2, 50);
 
 
-            // Walls
-            ctx.fillStyle = '#666';
-            state.walls.forEach(wall => {
-                if (wall.height !== 50) {
-                    ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
-                }
-            });
-
-
-            // Players
+            // Player (blue) and dummy (red)
             renderPlayer(state.players[0], '#00f');
             renderPlayer(state.enemies[0], '#f00');
 
@@ -278,27 +232,42 @@
         }
 
 
+        // SQUARE PLAYER + FLOATING SQUARE ARMS
         function renderPlayer(p, color) {
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.scale(p.facing, 1);
 
 
-            // Body
+            // BODY: main square
+            const size = p.width;
+            const half = size / 2;
+
+
             ctx.fillStyle = color;
-            ctx.fillRect(-p.width/2, -p.height/2, p.width, p.height);
+            ctx.fillRect(-half, -half, size, size);
 
 
-            // Head
+            // ARMS: two small floating squares
+            const armSize = size * 0.35;
+            const armOffsetX = half + armSize * 0.3;
+            const armOffsetY = -size * 0.15;
+
+
             ctx.fillStyle = '#ffd';
-            ctx.beginPath();
-            ctx.arc(0, -p.height/2 - 10, 12, 0, Math.PI * 2);
-            ctx.fill();
 
 
-            // M1 indicator
+            // Right arm (facing side)
+            ctx.fillRect(armOffsetX - armSize / 2, armOffsetY - armSize / 2, armSize, armSize);
+
+
+            // Left arm (other side)
+            ctx.fillRect(-armOffsetX - armSize / 2, armOffsetY - armSize / 2, armSize, armSize);
+
+
+            // M1 indicator bar on top of body
             ctx.fillStyle = p.stunned > 0 ? '#ff0' : '#fff';
-            ctx.fillRect(-p.width/2 + 5, -p.height/2 + 5, p.m1Count * 8, 6);
+            ctx.fillRect(-half + 4, -half + 4, p.m1Count * 8, 6);
 
 
             ctx.restore();
@@ -311,62 +280,6 @@
             render();
             requestAnimationFrame(gameLoop);
         }
-
-
-        // Specials 1–4
-        window.addEventListener('keydown', e => {
-            const key = e.key;
-            if (key < '1' || key > '4') return;
-
-
-            const player = state.players[0];
-            const enemy  = state.enemies[0];
-
-
-            if (player.stunned > 0) return;
-            if (!isEnemyInFront(player, enemy, 120)) return;
-
-
-            switch (key) {
-                case '1':
-                    // 1st special: strong punch that sends them flying
-                    enemy.health -= 18;
-                    enemy.vx      = player.facing * 900;
-                    enemy.vy     -= 200;
-                    enemy.stunned = 30;
-                    break;
-
-
-                case '2':
-                    // 2nd special: consecutive punches (long stun window)
-                    enemy.health -= 10;
-                    enemy.stunned = 75;
-                    break;
-
-
-                case '3':
-                    // 3rd special: shove that sends them back; Z held = short shove
-                    enemy.health -= 6;
-                    enemy.vx      = player.facing * 600;
-
-
-                    let shoveTime = 18;   // default slide distance
-                    if (state.keys['z']) {
-                        shoveTime = 6;    // shorter shove when Z is held
-                    }
-                    enemy.stunned = shoveTime;
-                    break;
-
-
-                case '4':
-                    // 4th special: uppercut that can chain with dash
-                    enemy.health -= 14;
-                    enemy.vy     -= 700;
-                    enemy.stunned = 45;
-                    player.vy    -= 150;  // slight self‑lift
-                    break;
-            }
-        });
 
 
         gameLoop();
