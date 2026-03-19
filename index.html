@@ -1,12 +1,15 @@
 ﻿<!DOCTYPE html>
 <html>
 <head>
-    <title>2D Strongest Battlegrounds</title>
+    <title>2D Strongest Battlegrounds - Scratch Style</title>
     <style>
         body { margin: 0; background: #222; overflow: hidden; font-family: Arial; }
         canvas {
-            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E9 70%, #D2B48C 100%);
+            background: #87CEEB;
             display: block;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
         }
         #ui {
             position: absolute; top: 10px; left: 10px; color: white; font-size: 18px;
@@ -25,26 +28,28 @@
             justify-content: center;
             flex-direction: column;
             gap: 10px;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.8);
             color: #fff;
         }
         #mainMenu h1, #pauseMenu h2 {
             margin-bottom: 10px;
             text-shadow: 2px 2px 4px #000;
+            font-size: 48px;
         }
         .btn {
-            padding: 10px 20px;
+            padding: 15px 30px;
             border: none;
             background: #FB1886;
             color: white;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 20px;
             cursor: pointer;
-            border-radius: 6px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(251,24,134,0.5);
         }
         .btn:hover {
             background: #B30D5D;
+            transform: scale(1.05);
         }
         #pauseMenu { display: none; }
     </style>
@@ -56,15 +61,15 @@
     <!-- MAIN MENU -->
     <div id="mainMenu">
         <h1>2D Strongest Battlegrounds</h1>
-        <button id="startBtn" class="btn">Start</button>
+        <button id="startBtn" class="btn">▶️ START</button>
     </div>
 
 
     <!-- PAUSE MENU -->
     <div id="pauseMenu">
-        <h2>Paused</h2>
-        <button id="resumeBtn" class="btn">Resume</button>
-        <button id="mainMenuBtn" class="btn">Main Menu</button>
+        <h2>⏸️ PAUSED</h2>
+        <button id="resumeBtn" class="btn">▶️ Resume</button>
+        <button id="mainMenuBtn" class="btn">🏠 Main Menu</button>
     </div>
 
 
@@ -76,15 +81,17 @@
 
 
     <div id="keys">
-        WASD: Move | Z: M1 | Q: Dash (W+Q = side dash) | Space: Jump | 1-4: Specials | Esc: Pause
+        WASD: Move | Z: M1 | Q: Dash | Space: Jump | 1-4: Specials | Esc: Pause
     </div>
 
 
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        canvas.width = 1200;
+        canvas.height = 800;
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
 
 
         const mainMenuEl = document.getElementById('mainMenu');
@@ -99,35 +106,111 @@
         const state = {
             mode: 'menu',
             players: [{
-                x: 200, y: canvas.height - 150, vx: 0, vy: 0,
-                width: 50, height: 50, health: 100,
+                x: 200, y: 500, vx: 0, vy: 0,
+                width: 48, height: 64, health: 100,
                 m1Count: 0, facing: 1, onGround: false,
                 stunned: 0, comboTimer: 0,
                 isDashing: false, dashTimer: 0, dashDir: 0,
-                m1Cooldown: 0,
-                respawnTimer: 0,
-                specialAnimTimer: 0, specialType: 0
+                m1Cooldown: 0, respawnTimer: 0,
+                specialAnimTimer: 0, specialType: 0,
+                jumpBuffer: 0
             }],
             enemies: [{
-                x: 600, y: canvas.height - 150, vx: 0, vy: 0,
-                width: 50, height: 50, health: 100,
-                m1Count: 0, facing: -1, onGround: false,
-                stunned: 0, comboTimer: 0,
+                x: 800, y: 500, vx: 0, vy: 0,
+                width: 48, height: 64, health: 100,
+                facing: -1, onGround: false, stunned: 0,
                 isDummy: true
             }],
-            walls: [
-                { x: 0, y: canvas.height - 50, width: canvas.width, height: 50 }
+            platforms: [
+                {x: 0, y: 650, width: 2000, height: 150},   // Main ground
+                {x: 400, y: 500, width: 200, height: 20},   // Platform 1
+                {x: 700, y: 400, width: 150, height: 20},   // Platform 2
+                {x: 1000, y: 300, width: 200, height: 20},  // Platform 3
+                {x: 300, y: 300, width: 150, height: 20}    // Platform 4
             ],
             keys: {},
-            camera: { x: 0, y: 0 }
+            camera: {x: 0, y: 0},
+            particles: []
         };
 
 
-        // INPUT
+        // PIXEL ART SPRITE DRAWING (Scratch style)
+        function drawPixelCharacter(ctx, x, y, color, facing, animState = {}) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(facing, 1);
+            ctx.imageSmoothingEnabled = false;
+
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(-24, 32, 48, 8);
+
+
+            // Body (pixel art style)
+            ctx.fillStyle = color;
+            ctx.fillRect(-20, -24, 40, 48); // Torso
+            
+            // Head
+            ctx.fillStyle = '#FDBCB4';
+            ctx.fillRect(-16, -40, 32, 24);
+            ctx.fillStyle = '#FFDBAC';
+            ctx.fillRect(-14, -38, 28, 20);
+
+
+            // Eyes
+            ctx.fillStyle = '#FFF';
+            ctx.fillRect(-10, -32, 6, 6);
+            ctx.fillRect(2, -32, 6, 6);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-9, -31, 3, 3);
+            ctx.fillRect(3, -31, 3, 3);
+
+
+            // Arms - ANIMATED
+            const armW = 12, armH = 20;
+            if (animState.special && animState.special === 2) {
+                // SPECIAL 2: MULTIPLE RED FISTS (5 fists flying)
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#ff4444';
+                for(let i = 0; i < 5; i++) {
+                    const offset = Math.sin(Date.now() * 0.02 + i) * 30 + i * 8;
+                    ctx.fillRect(24 + offset, -Math.sin(Date.now() * 0.01 + i) * 15 - 8, armW, armH);
+                }
+                ctx.shadowBlur = 0;
+            } else {
+                // Normal arms or single punch
+                ctx.fillStyle = '#FDBCB4';
+                ctx.fillRect(20, -16, armW, armH);  // Right arm
+                ctx.fillRect(-32, -16, armW, armH); // Left arm (flipped)
+            }
+
+
+            // Legs
+            ctx.fillStyle = '#4A4A4A';
+            ctx.fillRect(-12, 20, 10, 24);
+            ctx.fillRect(2, 20, 10, 24);
+
+
+            // Feet
+            ctx.fillStyle = '#333';
+            ctx.fillRect(-14, 40, 14, 8);
+            ctx.fillRect(0, 40, 14, 8);
+
+
+            // M1 Combo bar
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(-22, -44, animState.m1Count * 6 || 6, 4);
+
+
+            ctx.restore();
+        }
+
+
+        // Input
         window.addEventListener('keydown', e => {
             const k = e.key.toLowerCase();
-
-
             if (e.key === 'Escape') {
                 if (state.mode === 'playing') {
                     state.mode = 'paused';
@@ -138,70 +221,24 @@
                 }
                 return;
             }
-
-
             state.keys[k] = true;
         });
 
 
-        window.addEventListener('keyup', e => {
-            state.keys[e.key.toLowerCase()] = false;
-        });
+        window.addEventListener('keyup', e => state.keys[e.key.toLowerCase()] = false);
 
 
-        // MENU BUTTONS
-        startBtn.addEventListener('click', () => startGame());
-        resumeBtn.addEventListener('click', () => {
-            state.mode = 'playing';
-            pauseMenuEl.style.display = 'none';
-        });
-        mainMenuBtn.addEventListener('click', () => goToMainMenu());
-
-
-        function resetPlayer() {
-            const p = state.players[0];
-            p.x = 200;
-            p.y = canvas.height - 150;
-            p.vx = 0;
-            p.vy = 0;
-            p.health = 100;
-            p.m1Count = 0;
-            p.stunned = 0;
-            p.comboTimer = 0;
-            p.isDashing = false;
-            p.dashTimer = 0;
-            p.m1Cooldown = 0;
-            p.respawnTimer = 0;
-            p.specialAnimTimer = 0;
-            p.specialType = 0;
-            p.facing = 1;
-
-
-            document.getElementById('health').textContent = '100';
-            document.getElementById('m1count').textContent = '0';
-        }
-
-
-        function resetDummy() {
-            const e = state.enemies[0];
-            e.x = 600;
-            e.y = canvas.height - 150;
-            e.vx = 0;
-            e.vy = 0;
-            e.health = 100;
-            e.stunned = 0;
-            e.m1Count = 0;
-            document.getElementById('dummyhp').textContent = '100';
-        }
+        // Menu
+        startBtn.onclick = startGame;
+        resumeBtn.onclick = () => { state.mode = 'playing'; pauseMenuEl.style.display = 'none'; };
+        mainMenuBtn.onclick = goToMainMenu;
 
 
         function startGame() {
             mainMenuEl.style.display = 'none';
-            pauseMenuEl.style.display = 'none';
             uiEl.style.display = 'block';
             keysEl.style.display = 'block';
-            resetPlayer();
-            resetDummy();
+            resetGame();
             state.mode = 'playing';
         }
 
@@ -209,16 +246,34 @@
         function goToMainMenu() {
             state.mode = 'menu';
             mainMenuEl.style.display = 'flex';
-            pauseMenuEl.style.display = 'none';
             uiEl.style.display = 'none';
             keysEl.style.display = 'none';
         }
 
 
-        function isEnemyInFront(player, enemy, range) {
-            const dx = enemy.x - player.x;
-            const dist = Math.abs(dx);
-            return dist < range && dx * player.facing > 0;
+        function resetGame() {
+            state.players[0] = {
+                x: 200, y: 500, vx: 0, vy: 0, width: 48, height: 64, health: 100,
+                m1Count: 0, facing: 1, onGround: false, stunned: 0, comboTimer: 0,
+                isDashing: false, dashTimer: 0, dashDir: 0, m1Cooldown: 0,
+                respawnTimer: 0, specialAnimTimer: 0, specialType: 0, jumpBuffer: 0
+            };
+            state.enemies[0] = { x: 800, y: 500, vx: 0, vy: 0, width: 48, height: 64, health: 100, facing: -1, onGround: false, stunned: 0, isDummy: true };
+            state.particles = [];
+            updateUI();
+        }
+
+
+        function updateUI() {
+            document.getElementById('health').textContent = Math.max(0, Math.floor(state.players[0].health));
+            document.getElementById('dummyhp').textContent = Math.max(0, Math.floor(state.enemies[0].health));
+            document.getElementById('m1count').textContent = state.players[0].m1Count;
+        }
+
+
+        function isColliding(a, b) {
+            return a.x < b.x + b.width && a.x + a.width > b.x &&
+                   a.y < b.y + b.height && a.y + a.height > b.y;
         }
 
 
@@ -227,353 +282,230 @@
 
 
             const player = state.players[0];
-            const enemy  = state.enemies[0];
-
-
-            // Respawn handling
-            if (player.health <= 0) {
-                player.respawnTimer++;
-                if (player.respawnTimer > 120) {
-                    resetPlayer();
-                    resetDummy();
-                }
-                return;
-            }
+            const enemy = state.enemies[0];
 
 
             // Timers
-            if (player.m1Cooldown > 0) player.m1Cooldown--;
-            if (player.comboTimer > 0) player.comboTimer--;
-            if (player.stunned > 0) player.stunned--;
-            if (player.specialAnimTimer > 0) player.specialAnimTimer--;
+            Object.keys(player).forEach(k => {
+                if (k.includes('Timer') || k.includes('Cooldown')) player[k] = Math.max(0, player[k] - 1);
+            });
             if (enemy.stunned > 0) enemy.stunned--;
 
 
-            let movingForward = state.keys['w'];
-            let movingLeft    = state.keys['a'];
-            let movingRight   = state.keys['d'];
-            let jump          = state.keys[' '];
-            let m1            = state.keys['z'];
-            let dashKey       = state.keys['q'];
+            // Input
+            const input = {
+                left: state.keys['a'], right: state.keys['d'],
+                jump: state.keys[' '], forward: state.keys['w'],
+                m1: state.keys['z'], dash: state.keys['q']
+            };
 
 
-            // FIXED DASH - Works with both W+Q side dash AND standalone Q dash
-            if ((dashKey && movingForward || dashKey) && !player.isDashing && player.stunned === 0) {
-                player.isDashing = true;
-                player.dashTimer = 15;  // Slightly longer dash
-                player.dashDir   = player.facing * (movingForward ? 1.2 : 1); // Side dash is faster
-                player.vx = player.dashDir * 800; // Stronger dash speed
-            }
-
-
-            if (player.isDashing) {
-                player.vx = player.dashDir * 800;
-                player.dashTimer--;
-                if (player.dashTimer <= 0) {
-                    player.isDashing = false;
-                    player.vx *= 0.5; // Smooth deceleration
-                }
-            } else {
-                // Normal movement
+            // MOVEMENT - SCRATCH STYLE PLATFORMER
+            player.onGround = false;
+            
+            // Horizontal movement
+            if (!player.isDashing && !player.stunned) {
                 player.vx = 0;
-                if (movingLeft)  { player.vx -= 300; player.facing = -1; }
-                if (movingRight) { player.vx += 300; player.facing =  1; }
+                if (input.left) { player.vx = -350; player.facing = -1; }
+                if (input.right) { player.vx = 350; player.facing = 1; }
             }
 
 
-            if (movingForward && player.onGround) {
-                player.vy -= 80;
+            // DASH (W+Q or Q)
+            if (input.dash && !player.isDashing && !player.stunned) {
+                player.isDashing = true;
+                player.dashTimer = 12;
+                player.dashDir = player.facing * (input.forward ? 1.3 : 1);
+                player.vx = player.dashDir * 900;
             }
 
 
-            // JUMP HEIGHT FIXED TO 190 PIXELS EFFECTIVE HEIGHT
-            if (jump && player.onGround && !player.stunned) {
-                player.vy = -650;  // Tuned for ~190px jump height with current gravity
+            // JUMP (190px height)
+            if (input.jump && player.onGround && !player.stunned) {
+                player.vy = -650;
                 player.onGround = false;
             }
 
 
-            // M1
-            if (m1 && !player.stunned && player.m1Cooldown === 0) {
-                player.m1Cooldown = 30;  // Faster M1
+            // PHYSICS
+            player.vy += 1200 * (1/60); // Gravity
+            player.x += player.vx * (1/60);
+            player.y += player.vy * (1/60);
+
+
+            // PLATFORM COLLISIONS (Scratch style)
+            for (let plat of state.platforms) {
+                if (isColliding(player, plat)) {
+                    if (player.vy > 0 && player.y < plat.y) { // Landing
+                        player.y = plat.y - player.height/2;
+                        player.vy = 0;
+                        player.onGround = true;
+                    }
+                }
+            }
+
+
+            // M1 ATTACK
+            if (input.m1 && player.m1Cooldown === 0 && !player.stunned) {
+                player.m1Cooldown = 20;
                 player.comboTimer = 120;
                 player.m1Count = (player.m1Count % 4) + 1;
 
 
-                if (isEnemyInFront(player, enemy, 70)) {
-                    enemy.health -= 3;
-                    enemy.stunned = 25;
+                if (Math.abs(player.x - enemy.x) < 70 && Math.abs(player.y - enemy.y) < 50) {
+                    enemy.health -= 4;
+                    enemy.stunned = 30;
+                    state.particles.push({x: enemy.x, y: enemy.y, vx: 100, vy: -100, life: 20});
                 }
             }
 
 
-            // Physics
-            player.vy += 1200 * (1/60);
-            player.x  += player.vx * (1/60);
-            player.y  += player.vy * (1/60);
+            // CAMERA
+            state.camera.x = player.x - canvas.width/2;
+            state.camera.y = Math.max(0, player.y - canvas.height/2);
 
 
-            checkCollisions(player);
-            updateEnemyAI();
-
-
-            document.getElementById('health').textContent  = Math.max(0, Math.floor(player.health));
-            document.getElementById('dummyhp').textContent = Math.max(0, Math.floor(enemy.health));
-            document.getElementById('m1count').textContent = player.m1Count;
-
-
-            state.camera.x = player.x - canvas.width / 2;
-            state.camera.y = player.y - canvas.height / 2;
+            updateEnemy();
+            updateUI();
         }
 
 
-        function checkCollisions(entity) {
-            entity.onGround = false;
+        function updateEnemy() {
+            const enemy = state.enemies[0];
+            const player = state.players[0];
 
 
-            for (let wall of state.walls) {
-                if (entity.x + entity.width/2 > wall.x &&
-                    entity.x - entity.width/2 < wall.x + wall.width &&
-                    entity.y + entity.height/2 > wall.y &&
-                    entity.y + entity.height/2 < wall.y + wall.height + 10) {
+            enemy.onGround = false;
+            enemy.vy += 1200 * (1/60);
+            enemy.x += enemy.vx * (1/60);
+            enemy.y += enemy.vy * (1/60);
 
 
-                    if (wall.height === 50) {
-                        entity.y = wall.y - entity.height/2;
-                        entity.vy = 0;
-                        entity.onGround = true;
+            // Platform collision
+            for (let plat of state.platforms) {
+                if (isColliding(enemy, plat)) {
+                    if (enemy.vy > 0) {
+                        enemy.y = plat.y - enemy.height/2;
+                        enemy.vy = 0;
+                        enemy.onGround = true;
                     }
                 }
             }
+
+
+            // Dummy AI
+            if (enemy.stunned === 0) {
+                const dx = player.x - enemy.x;
+                if (Math.abs(dx) < 300) {
+                    enemy.vx = (dx > 0 ? 1 : -1) * 200;
+                    enemy.facing = dx > 0 ? 1 : -1;
+                } else {
+                    enemy.vx *= 0.9;
+                }
+            }
         }
 
 
-        function updateEnemyAI() {
+        // SPECIALS (1-4 keys)
+        window.addEventListener('keydown', e => {
+            if (state.mode !== 'playing' || e.key < '1' || e.key > '4') return;
+            
+            const player = state.players[0];
             const enemy = state.enemies[0];
-            enemy.vy += 1200 * (1/60);
-            enemy.x  += enemy.vx * (1/60);
-            enemy.y  += enemy.vy * (1/60);
-            enemy.vx *= 0.9;
-            checkCollisions(enemy);
-        }
+            
+            if (player.stunned > 0 || Math.abs(player.x - enemy.x) > 100) return;
+
+
+            player.specialAnimTimer = 30;
+            player.specialType = parseInt(e.key);
+
+
+            switch(e.key) {
+                case '1': // Strong punch
+                    enemy.health -= 25;
+                    enemy.vx = player.facing * 800;
+                    enemy.stunned = 40;
+                    break;
+                case '2': // Consecutive punches (5 red fists)
+                    enemy.health -= 15;
+                    enemy.stunned = 80;
+                    break;
+                case '3': // Shove
+                    enemy.health -= 8;
+                    enemy.vx = player.facing * 600;
+                    enemy.stunned = state.keys['z'] ? 15 : 35;
+                    break;
+                case '4': // Uppercut
+                    enemy.health -= 20;
+                    enemy.vy = -700;
+                    enemy.stunned = 50;
+                    break;
+            }
+        });
 
 
         function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 
             ctx.save();
             ctx.translate(-state.camera.x, -state.camera.y);
 
 
-            // Ground
+            // Platforms (Scratch-style pixel art)
             ctx.fillStyle = '#8B4513';
-            ctx.fillRect(0, canvas.height - 50 - state.camera.y, canvas.width * 2, 50);
-
-
-            renderPlayer(state.players[0], '#00f');
-            renderPlayer(state.enemies[0], '#f00');
-
-
-            ctx.restore();
-        }
-
-
-        function renderPlayer(p, color) {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.scale(p.facing, 1);
-
-
-            const size = p.width;
-            const half = size / 2;
-
-
-            // Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.beginPath();
-            ctx.ellipse(0, half + 12, half, 8, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-
-            // Body
-            ctx.fillStyle = color;
-            roundRect(ctx, -half, -half, size, size, 8);
-            ctx.fill();
-
-
-            // Outline
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#111';
-            roundRect(ctx, -half, -half, size, size, 8);
-            ctx.stroke();
-
-
-            // Eyes
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(-size * 0.15, -size * 0.1, 4, 0, Math.PI * 2);
-            ctx.arc( size * 0.05, -size * 0.1, 4, 0, Math.PI * 2);
-            ctx.fill();
-
-
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(-size * 0.15, -size * 0.1, 2, 0, Math.PI * 2);
-            ctx.arc( size * 0.05, -size * 0.1, 2, 0, Math.PI * 2);
-            ctx.fill();
-
-
-            // ARMS - ENHANCED SPECIAL 2 WITH MORE RED FISTS
-            const armSize = size * 0.35;
-            const baseOffsetX = half + armSize * 0.3;
-            const baseOffsetY = -size * 0.1;
-
-
-            if (p.specialAnimTimer > 0 && p.specialType === 2) {
-                // CONSECUTIVE PUNCHES - MORE RED FISTS + rapid movement
-                const rapidPunch = Math.sin(p.specialAnimTimer * 0.8) * 25;
-                const punchOffset = Math.sin(p.specialAnimTimer * 0.5) * 20;
-                
-                // 5 RED FISTS for dramatic effect
-                ctx.fillStyle = '#ff4444';
-                ctx.shadowColor = '#ff0000';
-                ctx.shadowBlur = 15;
-                
-                // Fist 1
-                ctx.fillRect(baseOffsetX + rapidPunch - armSize / 2, baseOffsetY + punchOffset - armSize / 2, armSize, armSize);
-                // Fist 2
-                ctx.fillRect(baseOffsetX + rapidPunch + 15 - armSize / 2, baseOffsetY + punchOffset + 8 - armSize / 2, armSize * 0.9, armSize * 0.9);
-                // Fist 3
-                ctx.fillRect(baseOffsetX - rapidPunch + 10 - armSize / 2, baseOffsetY - punchOffset - armSize / 2, armSize * 0.85, armSize * 0.85);
-                // Fist 4
-                ctx.fillRect(baseOffsetX + rapidPunch * 0.5 - armSize / 2, baseOffsetY + punchOffset * 0.7 - armSize / 2, armSize * 0.8, armSize * 0.8);
-                // Fist 5
-                ctx.fillRect(baseOffsetX - rapidPunch * 0.3 + 8 - armSize / 2, baseOffsetY - punchOffset * 0.3 - armSize / 2, armSize * 0.75, armSize * 0.75);
-                
-                ctx.shadowBlur = 0;
-            } else if (p.specialAnimTimer > 0) {
-                // Other specials - normal punch
-                const punchOffset = Math.sin(p.specialAnimTimer * 0.3) * 15;
-                ctx.fillStyle = '#ffd';
-                ctx.fillRect(baseOffsetX + punchOffset - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
-                ctx.fillRect(-baseOffsetX + punchOffset - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
-            } else {
-                // Normal position
-                ctx.fillStyle = '#ffd';
-                ctx.fillRect(baseOffsetX - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
-                ctx.fillRect(-baseOffsetX - armSize / 2, baseOffsetY - armSize / 2, armSize, armSize);
+            for (let plat of state.platforms) {
+                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(plat.x + 4, plat.y - 4, plat.width - 8, 8);
+                ctx.fillStyle = '#8B4513';
             }
 
 
-            // M1 indicator
-            ctx.fillStyle = p.stunned > 0 ? '#ff0' : '#fff';
-            ctx.fillRect(-half + 4, -half + 4, p.m1Count * 8, 6);
+            // Particles
+            state.particles = state.particles.filter(p => {
+                p.x += p.vx * (1/60);
+                p.y += p.vy * (1/60);
+                p.life--;
+                p.vy += 500 * (1/60);
+                ctx.fillStyle = `rgba(255, 255, 0, ${p.life/20})`;
+                ctx.fillRect(p.x, p.y, 4, 4);
+                return p.life > 0;
+            });
+
+
+            // Characters
+            drawPixelCharacter(ctx, state.players[0].x, state.players[0].y, '#4169E1', 
+                state.players[0].facing, {
+                    m1Count: state.players[0].m1Count,
+                    special: state.players[0].specialType === 2 && state.players[0].specialAnimTimer > 0 ? 2 : 0
+                });
+            
+            drawPixelCharacter(ctx, state.enemies[0].x, state.enemies[0].y, '#DC143C', 
+                state.enemies[0].facing);
 
 
             ctx.restore();
 
 
-            // HP bar
-            const maxHp = 100;
-            const hpRatio = Math.max(0, p.health) / maxHp;
-            const barWidth = 60;
-            const barHeight = 8;
-            const barX = p.x - barWidth / 2;
-            const barY = p.y - p.height - 20;
+            // UI BARS
+            const drawHPBar = (x, y, hp, max, color) => {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(x-2, y-2, 104, 16);
+                ctx.fillStyle = '#333';
+                ctx.fillRect(x, y, 100, 12);
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y, 100 * (hp/max), 12);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, 100, 12);
+            };
 
 
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
-            ctx.fillRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4);
-
-
-            ctx.fillStyle = '#444';
-            ctx.fillRect(barX, barY, barWidth, barHeight);
-
-
-            ctx.fillStyle = '#0f0';
-            ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
-
-
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(barX, barY, barWidth, barHeight);
-
-
-            // Respawn text
-            if (p.health <= 0) {
-                ctx.fillStyle = 'rgba(255,0,0,0.8)';
-                ctx.font = '24px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('RESPAWNING...', p.x, p.y + 80);
-            }
+            drawHPBar(20, 20, state.players[0].health, 100, '#00ff00');
+            drawHPBar(canvas.width-120, 20, state.enemies[0].health, 100, '#ff4444');
         }
-
-
-        function roundRect(ctx, x, y, width, height, radius) {
-            const r = Math.min(radius, width / 2, height / 2);
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.lineTo(x + width - r, y);
-            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-            ctx.lineTo(x + width, y + height - r);
-            ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-            ctx.lineTo(x + r, y + height);
-            ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-            ctx.lineTo(x, y + r);
-            ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
-        }
-
-
-        // Specials with arm animation
-        window.addEventListener('keydown', e => {
-            const key = e.key;
-            if (key < '1' || key > '4') return;
-            if (state.mode !== 'playing') return;
-
-
-            const player = state.players[0];
-            const enemy  = state.enemies[0];
-
-
-            if (player.stunned > 0 || player.health <= 0) return;
-            if (!isEnemyInFront(player, enemy, 120)) return;
-
-
-            player.specialAnimTimer = 30;
-            player.specialType = parseInt(key);
-
-
-            switch (key) {
-                case '1':
-                    enemy.health -= 20;
-                    enemy.vx = player.facing * 900;
-                    enemy.vy -= 200;
-                    enemy.stunned = 40;
-                    break;
-                case '2':
-                    enemy.health -= 12;
-                    enemy.stunned = 90;  // Longer stun for combos
-                    break;
-                case '3':
-                    enemy.health -= 6;
-                    enemy.vx = player.facing * 650;
-                    if (state.keys['z']) {
-                        enemy.stunned = 15;  // Short shove with Z
-                    } else {
-                        enemy.stunned = 35;  // Normal shove
-                    }
-                    break;
-                case '4':
-                    enemy.health -= 15;
-                    enemy.vy -= 700;
-                    enemy.stunned = 55;
-                    player.vy -= 150;
-                    break;
-            }
-        });
 
 
         function gameLoop() {
