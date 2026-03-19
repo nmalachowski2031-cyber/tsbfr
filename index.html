@@ -11,14 +11,61 @@
         #ui {
             position: absolute; top: 10px; left: 10px; color: white; font-size: 18px;
             text-shadow: 2px 2px 4px black;
+            display: none;
         }
         #keys {
             position: absolute; bottom: 10px; left: 10px; color: #fff; font-size: 14px;
+            display: none;
         }
+        #mainMenu, #pauseMenu {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+        }
+        #mainMenu h1, #pauseMenu h2 {
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px #000;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            background: #FB1886;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 6px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .btn:hover {
+            background: #B30D5D;
+        }
+        #pauseMenu { display: none; }
     </style>
 </head>
 <body>
     <canvas id="game"></canvas>
+
+
+    <!-- MAIN MENU -->
+    <div id="mainMenu">
+        <h1>2D Strongest Battlegrounds</h1>
+        <button id="startBtn" class="btn">Start</button>
+    </div>
+
+
+    <!-- PAUSE MENU -->
+    <div id="pauseMenu">
+        <h2>Paused</h2>
+        <button id="resumeBtn" class="btn">Resume</button>
+        <button id="mainMenuBtn" class="btn">Main Menu</button>
+    </div>
 
 
     <div id="ui">
@@ -29,7 +76,7 @@
 
 
     <div id="keys">
-        WASD: Move | Z: M1 | Q: Dash (W+Q = side dash) | Space: Jump | 1-4: Specials
+        WASD: Move | Z: M1 | Q: Dash (W+Q = side dash) | Space: Jump | 1-4: Specials | Esc: Pause
     </div>
 
 
@@ -40,20 +87,44 @@
         canvas.height = window.innerHeight;
 
 
-        // Game state
+        const mainMenuEl = document.getElementById('mainMenu');
+        const pauseMenuEl = document.getElementById('pauseMenu');
+        const startBtn = document.getElementById('startBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const mainMenuBtn = document.getElementById('mainMenuBtn');
+        const uiEl = document.getElementById('ui');
+        const keysEl = document.getElementById('keys');
+
+
         const state = {
+            mode: 'menu', // 'menu' | 'playing' | 'paused'
             players: [{
-                x: 200, y: canvas.height - 100, vx: 0, vy: 0,
-                width: 50, height: 50, health: 100,   // square player
-                m1Count: 0, facing: 1, onGround: false,
-                stunned: 0, comboTimer: 0,
-                isDashing: false, dashTimer: 0, dashDir: 0
+                x: 200,
+                y: canvas.height - 150,   // clearly above ground (ground is at height-50)
+                vx: 0, vy: 0,
+                width: 50, height: 50,
+                health: 100,
+                m1Count: 0,
+                facing: 1,
+                onGround: false,
+                stunned: 0,
+                comboTimer: 0,
+                isDashing: false,
+                dashTimer: 0,
+                dashDir: 0,
+                m1Cooldown: 0           // frames until next M1 (60 = ~1 second)
             }],
             enemies: [{
-                x: 600, y: canvas.height - 100, vx: 0, vy: 0,
-                width: 50, height: 50, health: 100,   // square dummy
-                m1Count: 0, facing: -1, onGround: false,
-                stunned: 0, comboTimer: 0,
+                x: 600,
+                y: canvas.height - 150,  // also above ground
+                vx: 0, vy: 0,
+                width: 50, height: 50,
+                health: 100,
+                m1Count: 0,
+                facing: -1,
+                onGround: false,
+                stunned: 0,
+                comboTimer: 0,
                 isDummy: true
             }],
             walls: [
@@ -64,13 +135,102 @@
         };
 
 
-        // Input
+        // INPUT
         window.addEventListener('keydown', e => {
-            state.keys[e.key.toLowerCase()] = true;
+            const k = e.key.toLowerCase();
+
+
+            // Pause toggle with Esc
+            if (e.key === 'Escape') {
+                if (state.mode === 'playing') {
+                    state.mode = 'paused';
+                    pauseMenuEl.style.display = 'flex';
+                } else if (state.mode === 'paused') {
+                    state.mode = 'playing';
+                    pauseMenuEl.style.display = 'none';
+                }
+                return;
+            }
+
+
+            state.keys[k] = true;
         });
+
+
         window.addEventListener('keyup', e => {
             state.keys[e.key.toLowerCase()] = false;
         });
+
+
+        // MENU BUTTONS
+        startBtn.addEventListener('click', () => {
+            startGame();
+        });
+
+
+        resumeBtn.addEventListener('click', () => {
+            state.mode = 'playing';
+            pauseMenuEl.style.display = 'none';
+        });
+
+
+        mainMenuBtn.addEventListener('click', () => {
+            goToMainMenu();
+        });
+
+
+        function resetGame() {
+            const p = state.players[0];
+            const e = state.enemies[0];
+
+
+            p.x = 200;
+            p.y = canvas.height - 150;
+            p.vx = 0;
+            p.vy = 0;
+            p.health = 100;
+            p.m1Count = 0;
+            p.stunned = 0;
+            p.comboTimer = 0;
+            p.isDashing = false;
+            p.dashTimer = 0;
+            p.dashDir = 0;
+            p.m1Cooldown = 0;
+            p.facing = 1;
+
+
+            e.x = 600;
+            e.y = canvas.height - 150;
+            e.vx = 0;
+            e.vy = 0;
+            e.health = 100;
+            e.stunned = 0;
+            e.m1Count = 0;
+
+
+            document.getElementById('health').textContent = '100';
+            document.getElementById('dummyhp').textContent = '100';
+            document.getElementById('m1count').textContent = '0';
+        }
+
+
+        function startGame() {
+            mainMenuEl.style.display = 'none';
+            pauseMenuEl.style.display = 'none';
+            uiEl.style.display = 'block';
+            keysEl.style.display = 'block';
+            resetGame();
+            state.mode = 'playing';
+        }
+
+
+        function goToMainMenu() {
+            state.mode = 'menu';
+            mainMenuEl.style.display = 'flex';
+            pauseMenuEl.style.display = 'none';
+            uiEl.style.display = 'none';
+            keysEl.style.display = 'none';
+        }
 
 
         function isEnemyInFront(player, enemy, range) {
@@ -81,11 +241,13 @@
 
 
         function update() {
+            if (state.mode !== 'playing') return;
+
+
             const player = state.players[0];
             const enemy  = state.enemies[0];
 
 
-            // Input handling
             let movingForward = state.keys['w'];
             let movingLeft    = state.keys['a'];
             let movingRight   = state.keys['d'];
@@ -94,7 +256,12 @@
             let dashKey       = state.keys['q'];
 
 
-            // Dashing and movement
+            // Timers
+            if (player.m1Cooldown > 0) player.m1Cooldown--;
+            if (player.comboTimer > 0) player.comboTimer--;
+
+
+            // DASH
             if (dashKey && movingForward && !player.isDashing && player.stunned === 0) {
                 player.isDashing = true;
                 player.dashTimer = 12;
@@ -103,30 +270,32 @@
 
 
             if (player.isDashing) {
-                player.vx = player.dashDir * 800;
+                player.vx = player.dashDir * 600;
                 player.dashTimer--;
                 if (player.dashTimer <= 0) player.isDashing = false;
             } else {
                 player.vx = 0;
-                if (movingLeft)  { player.vx -= 400; player.facing = -1; }
-                if (movingRight) { player.vx += 400; player.facing =  1; }
+                if (movingLeft)  { player.vx -= 250; player.facing = -1; }
+                if (movingRight) { player.vx += 250; player.facing =  1; }
             }
 
 
             if (movingForward && player.onGround) {
-                player.vy -= 100;
+                player.vy -= 80;
             }
 
 
+            // JUMP – higher
             if (jump && player.onGround && !player.stunned) {
-                player.vy = -600;
+                player.vy = -800;         // higher jump
                 player.onGround = false;
             }
 
 
-            // M1 Combat System
-            if (m1 && !player.stunned) {
-                player.comboTimer = 120;
+            // M1 – 1 dmg, 1 second stun, 1 second cooldown
+            if (m1 && !player.stunned && player.m1Cooldown === 0) {
+                player.m1Cooldown = 60;   // 60 frames ≈ 1 second at 60fps
+                player.comboTimer = 60;   // combo window
                 player.m1Count = (player.m1Count % 4) + 1;
 
 
@@ -135,22 +304,8 @@
 
 
                 if (dist < 60 && dx * player.facing > 0) {
-                    if (player.m1Count === 4) {
-                        if (jump) {
-                            enemy.health -= 12;
-                            enemy.vy = 800;
-                            enemy.stunned = 60;
-                        } else if (movingForward) {
-                            enemy.health -= 10;
-                            enemy.vy = -550;
-                            player.vy = -250;
-                        } else {
-                            enemy.health -= 4.5;
-                        }
-                    } else {
-                        enemy.health -= 3;
-                        enemy.stunned = 20;
-                    }
+                    enemy.health -= 1;
+                    enemy.stunned = 60;   // 1 second stun
                 }
             }
 
@@ -161,18 +316,15 @@
             player.y  += player.vy * (1/60);
 
 
-            // Collision
             checkCollisions(player);
             updateEnemyAI();
 
 
-            // Update UI
             document.getElementById('health').textContent  = Math.max(0, Math.floor(player.health));
             document.getElementById('dummyhp').textContent = Math.max(0, Math.floor(enemy.health));
             document.getElementById('m1count').textContent = player.m1Count;
 
 
-            // Camera follow
             state.camera.x = player.x - canvas.width / 2;
             state.camera.y = player.y - canvas.height / 2;
         }
@@ -189,7 +341,7 @@
                     entity.y + entity.height/2 < wall.y + wall.height + 10) {
 
 
-                    if (wall.height === 50) { // Ground
+                    if (wall.height === 50) {
                         entity.y = wall.y - entity.height/2;
                         entity.vy = 0;
                         entity.onGround = true;
@@ -202,19 +354,22 @@
         }
 
 
-        // Dummy: no AI, just stands still
         function updateEnemyAI() {
             const enemy = state.enemies[0];
+            // Dummy: no AI, just knockback and gravity
             enemy.vy += 1200 * (1/60);
             enemy.x  += enemy.vx * (1/60);
             enemy.y  += enemy.vy * (1/60);
+            enemy.vx *= 0.9;
             checkCollisions(enemy);
         }
 
 
         function render() {
-            ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+            ctx.save();
             ctx.translate(-state.camera.x, -state.camera.y);
 
 
@@ -223,7 +378,7 @@
             ctx.fillRect(0, canvas.height - 50 - state.camera.y, canvas.width * 2, 50);
 
 
-            // Player (blue) and dummy (red)
+            // Player and Dummy
             renderPlayer(state.players[0], '#00f');
             renderPlayer(state.enemies[0], '#f00');
 
@@ -232,46 +387,159 @@
         }
 
 
-        // SQUARE PLAYER + FLOATING SQUARE ARMS
+        // Better icon + HP bar above head
         function renderPlayer(p, color) {
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.scale(p.facing, 1);
 
 
-            // BODY: main square
             const size = p.width;
             const half = size / 2;
 
 
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(0, half + 12, half, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            // Body
             ctx.fillStyle = color;
-            ctx.fillRect(-half, -half, size, size);
+            roundRect(ctx, -half, -half, size, size, 8);
+            ctx.fill();
 
 
-            // ARMS: two small floating squares
+            // Outline
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#111';
+            roundRect(ctx, -half, -half, size, size, 8);
+            ctx.stroke();
+
+
+            // Eyes
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(-size * 0.15, -size * 0.1, 4, 0, Math.PI * 2);
+            ctx.arc( size * 0.05, -size * 0.1, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-size * 0.15, -size * 0.1, 2, 0, Math.PI * 2);
+            ctx.arc( size * 0.05, -size * 0.1, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            // Arms – small floating squares
             const armSize = size * 0.35;
             const armOffsetX = half + armSize * 0.3;
-            const armOffsetY = -size * 0.15;
+            const armOffsetY = -size * 0.1;
 
 
             ctx.fillStyle = '#ffd';
-
-
-            // Right arm (facing side)
             ctx.fillRect(armOffsetX - armSize / 2, armOffsetY - armSize / 2, armSize, armSize);
-
-
-            // Left arm (other side)
             ctx.fillRect(-armOffsetX - armSize / 2, armOffsetY - armSize / 2, armSize, armSize);
 
 
-            // M1 indicator bar on top of body
+            // M1 indicator
             ctx.fillStyle = p.stunned > 0 ? '#ff0' : '#fff';
             ctx.fillRect(-half + 4, -half + 4, p.m1Count * 8, 6);
 
 
             ctx.restore();
+
+
+            // HP bar above head
+            const maxHp = 100;
+            const hpRatio = Math.max(0, p.health) / maxHp;
+            const barWidth = 60;
+            const barHeight = 8;
+
+
+            const barX = p.x - barWidth / 2;
+            const barY = p.y - p.height - 20;
+
+
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4);
+
+
+            ctx.fillStyle = '#444';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+
+
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
+
+
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
         }
+
+
+        function roundRect(ctx, x, y, width, height, radius) {
+            const r = Math.min(radius, width / 2, height / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + width - r, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+            ctx.lineTo(x + width, y + height - r);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+            ctx.lineTo(x + r, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+
+        // Specials 1–4 with your damage values
+        window.addEventListener('keydown', e => {
+            const key = e.key;
+            if (key < '1' || key > '4') return;
+            if (state.mode !== 'playing') return;
+
+
+            const player = state.players[0];
+            const enemy  = state.enemies[0];
+
+
+            if (player.stunned > 0) return;
+            if (!isEnemyInFront(player, enemy, 120)) return;
+
+
+            switch (key) {
+                case '1':
+                    // 1st special: 20 dmg
+                    enemy.health -= 20;
+                    enemy.vx      = player.facing * 900;
+                    enemy.vy     -= 200;
+                    enemy.stunned = 40;
+                    break;
+                case '2':
+                    // 2nd special: 10 dmg
+                    enemy.health -= 10;
+                    enemy.stunned = 80;
+                    break;
+                case '3':
+                    // 3rd special: 5 dmg
+                    enemy.health -= 5;
+                    enemy.vx      = player.facing * 600;
+                    enemy.stunned = 30;
+                    break;
+                case '4':
+                    // 4th special: 12 dmg
+                    enemy.health -= 12;
+                    enemy.vy     -= 700;
+                    enemy.stunned = 50;
+                    player.vy    -= 150;
+                    break;
+            }
+        });
 
 
         function gameLoop() {
